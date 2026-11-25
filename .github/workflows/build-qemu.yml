@@ -27,7 +27,10 @@ jobs:
       - name: Disable werror in subprojects
         working-directory: qemu-src
         run: |
-          meson configure build -Dwerror=false || true
+          meson configure build -Dwerror=false -Dc_args="-Wno-error=discarded-qualifiers" -Dcpp_args="-Wno-error=discarded-qualifiers" || true
+          # also patch dtc directly as fallback
+          sed -i 's/char \*sep;/const char *sep;/g; s/sep = memchr/sep = (char *)memchr/g' ../subprojects/dtc/libfdt/fdt_overlay.c 2>/dev/null || true
+          find . -path '*/dtc/libfdt/fdt_overlay.c' -exec sed -i 's/= memchr(/= (char *)memchr(/g' {} + || true
 
       - name: Build
         working-directory: qemu-src
