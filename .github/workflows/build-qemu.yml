@@ -1,0 +1,44 @@
+name: build-qemu
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential ninja-build pkg-config libglib2.0-dev libpixman-1-dev python3-venv libslirp-dev
+
+      - name: Download QEMU source
+        run: |
+          curl -fsSL https://download.qemu.org/qemu-9.2.0.tar.xz -o qemu.tar.xz
+          tar -xf qemu.tar.xz
+          mv qemu-9.2.0 qemu-src
+
+      - name: Configure
+        working-directory: qemu-src
+        run: |
+          ./configure --target-list=x86_64-softmmu --enable-slirp --disable-werror
+          
+      - name: Build
+        working-directory: qemu-src
+        run: |
+          make -j"$(nproc)"
+          ls -lh build/qemu-system-x86_64 || true
+
+      - name: Package artifact
+        run: |
+          mkdir -p out
+          cp qemu-src/build/qemu-system-x86_64 out/
+          strip out/qemu-system-x86_64 || true
+          ls -lh out/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-x86_64-softmmu
+          path: out/*
