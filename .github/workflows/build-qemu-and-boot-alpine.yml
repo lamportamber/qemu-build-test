@@ -57,17 +57,18 @@ jobs:
         run: |
           set -e
           QEMU="$PWD/qemu-src/build/qemu-system-x86_64"
-          ACCEL="-cpu max"
+          CPUS="$(nproc)"
+          ACCEL="-cpu max -machine q35,accel=tcg"
           if [ -e /dev/kvm ]; then
             sudo chmod 666 /dev/kvm || true
             if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
-              ACCEL="-enable-kvm -cpu host"
+              ACCEL="-enable-kvm -cpu host -machine q35,accel=kvm"
             fi
           fi
-          echo "ACCEL=$ACCEL MEM=${MEM}M QEMU=$QEMU"
+          echo "ACCEL=$ACCEL MEM=${MEM}M CPUS=$CPUS QEMU=$QEMU"
           cat > run_alpine.exp <<EXP
           set timeout 300
-          spawn ${QEMU} -m ${MEM}M -smp 2 ${ACCEL} -cdrom alpine.iso -boot d -nographic -net nic -net user
+          spawn ${QEMU} -m ${MEM}M -smp ${CPUS} ${ACCEL} -cdrom alpine.iso -boot d -nographic -netdev user,id=n0 -device virtio-net-pci,netdev=n0
           expect "login:"
           send "root\\r"
           expect "#"
