@@ -1,2 +1,3 @@
-# qemu-build-test
-Build QEMU from source in Actions
+# QEMU build test
+
+Build QEMU in GitHub Actions and upload artifact.
