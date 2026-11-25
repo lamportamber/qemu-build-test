@@ -1,0 +1,47 @@
+name: alpine-qemu-hello
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86_64 wget expect
+
+      - name: Pick random RAM 3.0-3.5GB
+        run: |
+          MIN=3072; MAX=3584; STEP=64
+          N=$(( (MAX-MIN)/STEP + 1 ))
+          MEM=$(( MIN + (RANDOM % N) * STEP ))
+          echo "MEM=$MEM" >> $GITHUB_ENV
+          echo "RAM=${MEM}M"
+
+      - name: Download Alpine virt
+        run: |
+          wget -q -O alpine.iso https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/x86_64/alpine-virt-3.20.3-x86_64.iso
+
+      - name: Boot Alpine and run echo helo
+        env:
+          MEM: ${{ env.MEM }}
+        run: |
+          set -e
+          ACCEL="-cpu max"
+          if [ -e /dev/kvm ]; then ACCEL="-enable-kvm -cpu host"; fi
+          echo "ACCEL=$ACCEL MEM=${MEM}M"
+          cat > run_alpine.exp <<EXP
+          set timeout 300
+          spawn qemu-system-x86_64 -m ${MEM}M -smp 2 ${ACCEL} -cdrom alpine.iso -boot d -nographic -net nic -net user
+          expect "login:"
+          send "root\r"
+          expect "#"
+          send "echo helo\r"
+          expect "helo"
+          send "poweroff\r"
+          expect eof
+          EXP
+          expect -f run_alpine.exp
