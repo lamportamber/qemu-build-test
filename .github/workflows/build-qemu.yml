@@ -27,12 +27,12 @@ jobs:
       - name: Disable werror in subprojects
         working-directory: qemu-src
         run: |
-          # fix bad previous patch if present
           find . -path '*/dtc/libfdt/fdt_overlay.c' -exec sed -i 's/(char \*)memchr/memchr/g' {} + || true
-          # remove -Werror from bundled dtc
           find . -path '*/dtc/meson.build' -exec sed -i "s/'-Werror',\\?//g; s/-Werror//g" {} + || true
           find . -path '*/dtc/libfdt/meson.build' -exec sed -i "s/'-Werror',\\?//g; s/-Werror//g" {} + || true
-          meson setup --reconfigure build || meson configure build -Dwerror=false || true
+          meson setup --reconfigure build -Dwerror=false || meson configure build -Dwerror=false || true
+          # hard override in generated ninja
+          sed -i 's/ -Werror / /g; s/ -Werror$/ /g' build/build.ninja || true
 
       - name: Build
         working-directory: qemu-src
