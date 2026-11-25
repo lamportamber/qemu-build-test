@@ -1,0 +1,74 @@
+name: build-qemu-and-boot-alpine
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-and-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential ninja-build pkg-config libglib2.0-dev libpixman-1-dev python3-venv libslirp-dev wget expect
+
+      - name: Pick random RAM 3.0-3.5GB
+        run: |
+          MIN=3072; MAX=3584; STEP=64
+          N=$(( (MAX-MIN)/STEP + 1 ))
+          MEM=$(( MIN + (RANDOM % N) * STEP ))
+          echo "MEM=$MEM" >> $GITHUB_ENV
+          echo "RAM=${MEM}M"
+
+      - name: Download QEMU source
+        run: |
+          curl -fsSL https://download.qemu.org/qemu-9.2.0.tar.xz -o qemu.tar.xz
+          tar -xf qemu.tar.xz
+          mv qemu-9.2.0 qemu-src
+
+      - name: Configure
+        working-directory: qemu-src
+        run: |
+          ./configure --target-list=x86_64-softmmu --enable-slirp --disable-werror
+
+      - name: Disable werror in subprojects
+        working-directory: qemu-src
+        run: |
+          find . -path '*/dtc/libfdt/fdt_overlay.c' -exec sed -i 's/(char \*)memchr/memchr/g' {} + || true
+          find . -path '*/dtc/meson.build' -exec sed -i "s/'-Werror',\?//g; s/-Werror//g" {} + || true
+          find . -path '*/dtc/libfdt/meson.build' -exec sed -i "s/'-Werror',\?//g; s/-Werror//g" {} + || true
+          meson setup --reconfigure build -Dwerror=false || meson configure build -Dwerror=false || true
+          sed -i 's/ -Werror / /g; s/ -Werror$/ /g' build/build.ninja || true
+
+      - name: Build QEMU
+        working-directory: qemu-src
+        run: |
+          make -j"$(nproc)"
+          ls -lh build/qemu-system-x86_64
+
+      - name: Download Alpine virt
+        run: |
+          wget -q -O alpine.iso https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/x86_64/alpine-virt-3.20.3-x86_64.iso
+
+      - name: Boot Alpine in built QEMU and run echo helo
+        env:
+          MEM: ${{ env.MEM }}
+        run: |
+          set -e
+          QEMU="$PWD/qemu-src/build/qemu-system-x86_64"
+          ACCEL="-cpu max"
+          if [ -e /dev/kvm ]; then ACCEL="-enable-kvm -cpu host"; fi
+          echo "ACCEL=$ACCEL MEM=${MEM}M QEMU=$QEMU"
+          cat > run_alpine.exp <<EXP
+          set timeout 300
+          spawn ${QEMU} -m ${MEM}M -smp 2 ${ACCEL} -cdrom alpine.iso -boot d -nographic -net nic -net user
+          expect "login:"
+          send "root\\r"
+          expect "#"
+          send "echo helo\\r"
+          expect "helo"
+          send "poweroff\\r"
+          expect eof
+          EXP
+          expect -f run_alpine.exp
