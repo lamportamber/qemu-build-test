@@ -24,6 +24,11 @@ jobs:
         run: |
           ./configure --target-list=x86_64-softmmu --enable-slirp --disable-werror
           
+      - name: Disable werror in subprojects
+        working-directory: qemu-src
+        run: |
+          meson configure build -Dwerror=false || true
+
       - name: Build
         working-directory: qemu-src
         run: |
