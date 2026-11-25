@@ -58,7 +58,12 @@ jobs:
           set -e
           QEMU="$PWD/qemu-src/build/qemu-system-x86_64"
           ACCEL="-cpu max"
-          if [ -e /dev/kvm ]; then ACCEL="-enable-kvm -cpu host"; fi
+          if [ -e /dev/kvm ]; then
+            sudo chmod 666 /dev/kvm || true
+            if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+              ACCEL="-enable-kvm -cpu host"
+            fi
+          fi
           echo "ACCEL=$ACCEL MEM=${MEM}M QEMU=$QEMU"
           cat > run_alpine.exp <<EXP
           set timeout 300
